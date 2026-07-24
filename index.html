@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📖 AI 감정 일기</title>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 30px 20px; }
+    .container { background: #fff; width: 100%; max-width: 850px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); padding: 30px; text-align: center; }
+    h1 { color: #333; margin-bottom: 8px; font-size: 1.8rem; }
+    p.subtitle { color: #666; font-size: 0.95rem; margin-bottom: 25px; }
+    .app-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+    @media (max-width: 650px) { .app-layout { grid-template-columns: 1fr; } }
+    .cam-box { position: relative; background: #1e1e1e; border-radius: 15px; overflow: hidden; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; }
+    video, canvas.preview { width: 100%; height: 100%; object-fit: cover; }
+    .status-badge { position: absolute; top: 12px; left: 12px; background: rgba(0, 0, 0, 0.75); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; backdrop-filter: blur(4px); }
+    .control-box { display: flex; flex-direction: column; justify-content: space-between; gap: 15px; }
+    button { background: #4A90E2; color: #fff; border: none; padding: 15px; border-radius: 12px; font-size: 1.05rem; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3); }
+    button:hover:not(:disabled) { background: #357ABD; }
+    button:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; }
+    .result-card { background: #f8f9fa; border-radius: 12px; padding: 20px; text-align: left; flex-grow: 1; border: 1px solid #e9ecef; display: flex; flex-direction: column; justify-content: center; }
+    .emotion-title { font-size: 1.4rem; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }
+    .emotion-desc { color: #555; font-size: 0.9rem; line-height: 1.5; margin-bottom: 15px; }
+    .bar-item { display: flex; align-items: center; font-size: 0.8rem; margin-bottom: 4px; }
+    .bar-label { width: 50px; color: #666; }
+    .bar-track { flex-grow: 1; background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden; margin: 0 8px; }
+    .bar-fill { height: 100%; background: #4A90E2; width: 0%; transition: width 0.4s ease; }
+    .bar-percent { width: 35px; text-align: right; color: #888; }
+    .history-section { border-top: 2px dashed #eee; padding-top: 25px; text-align: left; }
+    .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .history-header h2 { font-size: 1.25rem; color: #333; }
+    .refresh-btn { background: #6c757d; padding: 6px 14px; font-size: 0.85rem; border-radius: 6px; box-shadow: none; }
+    .refresh-btn:hover { background: #5a6268; }
+    .table-wrapper { overflow-x: auto; background: #fff; border-radius: 10px; border: 1px solid #e9ecef; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; text-align: left; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid #eee; text-align: center; }
+    th { background: #f8f9fa; color: #495057; font-weight: 600; }
+    tr:hover { background: #f1f3f5; }
+    .img-link { color: #4A90E2; text-decoration: none; font-weight: bold; }
+    .img-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📖 AI 감정 일기</h1>
+    <p class="subtitle">카메라를 바라보고 사진을 찍으면 감정을 분석하여 기록해 드려요.</p>
+    
+    <div class="app-layout">
+      <div class="cam-box">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="photoCanvas" class="preview" style="display: none;"></canvas>
+        <div id="statusBadge" class="status-badge">AI 모델 로딩 중...</div>
+      </div>
+      <div class="control-box">
+        <div id="resultCard" class="result-card">
+          <div id="emotionTitle" class="emotion-title">준비 중</div>
+          <div id="emotionDesc" class="emotion-desc">카메라가 켜지면 [사진 찍고 감정 분석] 버튼을 눌러주세요.</div>
+          <div id="bars"></div>
+        </div>
+        <button id="captureBtn" disabled>📷 사진 찍고 감정 분석</button>
+      </div>
+    </div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <h2>📜 누적 감정 일기 목록</h2>
+        <button id="refreshBtn" class="refresh-btn" onclick="loadHistory()">🔄 새로고침</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>날짜 및 시간</th>
+              <th>분석 감정</th>
+              <th>확신도</th>
+              <th>사진 확인</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr><td colspan="4">기록을 불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ 아래 큰따옴표 안에 1단계에서 복사한 구글 앱스 스크립트 웹 앱 URL을 붙여넣으세요!
+    const GAS_URL = "https://script.google.com/macros/s/YOUR_EXEC_ID/exec";
+
+    const video = document.getElementById('webcam');
+    const photoCanvas = document.getElementById('photoCanvas');
+    const captureBtn = document.getElementById('captureBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const emotionTitle = document.getElementById('emotionTitle');
+    const emotionDesc = document.getElementById('emotionDesc');
+    const barsContainer = document.getElementById('bars');
+    const historyTableBody = document.getElementById('historyTableBody');
+
+    const emotionMap = {
+      happy: { name: "기쁨 😊", desc: "밝고 긍정적인 에너지가 가득한 순간이네요! 오늘 즐거웠던 일을 일기에 남겨보세요." },
+      neutral: { name: "평온 😐", desc: "차분하고 안정된 마음 상태입니다. 무던하게 지나가는 오늘 하루도 소중합니다." },
+      sad: { name: "슬픔 😢", desc: "마음이 가라앉아 있나요? 솔직한 감정을 써 내려가는 것만으로도 마음이 나아집니다." },
+      angry: { name: "분노 😡", desc: "답답하거나 속상한 일이 있으셨나요? 글을 통해 마음을 가만히 정돈해보세요." },
+      surprised: { name: "놀람 😲", desc: "뜻밖의 일에 놀라셨군요! 어떤 흥미로운 일이 있었는지 적어볼까요?" },
+      fearful: { name: "두려움 😨", desc: "걱정이나 불안한 마음이 드시나요? 불안의 이유를 글로 써보면 안정을 찾을 수 있습니다." },
+      disgusted: { name: "불쾌 🤢", desc: "스트레스 받는 상황인가요? 나를 기분 좋게 만드는 일들을 떠올려 보세요." }
+    };
+
+    async function init() {
+      try {
+        loadHistory(); 
+
+        const MODEL_URL = 'https://vladmandic.github.io/face-api/model/';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+        statusBadge.innerText = "카메라 연결 중...";
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => { statusBadge.innerText = "실시간 카메라 사용 중"; captureBtn.disabled = false; };
+      } catch (err) {
+        statusBadge.innerText = "오류 발생";
+        emotionTitle.innerText = "카메라 권한 필요";
+        emotionDesc.innerText = "웹캠 사용 권한을 허용해 주세요.";
+      }
+    }
+
+    captureBtn.addEventListener('click', async () => {
+      captureBtn.disabled = true;
+      statusBadge.innerText = "감정 분석 중...";
+      photoCanvas.width = video.videoWidth;
+      photoCanvas.height = video.videoHeight;
+      photoCanvas.getContext('2d').drawImage(video, 0, 0);
+      video.style.display = 'none';
+      photoCanvas.style.display = 'block';
+
+      const detection = await faceapi.detectSingleFace(photoCanvas, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+      if (!detection) {
+        emotionTitle.innerText = "얼굴 인식 실패 ❓";
+        emotionDesc.innerText = "카메라 정면을 또렷하게 바라보고 다시 시도해 주세요.";
+        statusBadge.innerText = "재시도 필요";
+        setTimeout(resetCamera, 2000);
+        return;
+      }
+
+      const sorted = Object.keys(detection.expressions).map(k => ({ emotion: k, score: detection.expressions[k] })).sort((a, b) => b.score - a.score);
+      const top = sorted[0];
+      const info = emotionMap[top.emotion] || { name: top.emotion, desc: "오늘의 감정이 기록되었습니다." };
+      const percent = Math.round(top.score * 100);
+
+      emotionTitle.innerText = info.name;
+      emotionDesc.innerText = info.desc;
+
+      barsContainer.innerHTML = "";
+      sorted.forEach(item => {
+        const p = Math.round(item.score * 100);
+        if (p < 1) return;
+        const name = emotionMap[item.emotion] ? emotionMap[item.emotion].name.split(' ')[0] : item.emotion;
+        barsContainer.innerHTML += `<div class="bar-item"><span class="bar-label">${name}</span><div class="bar-track"><div class="bar-fill" style="width:${p}%;"></div></div><span class="bar-percent">${p}%</span></div>`;
+      });
+
+      await sendToSheet(photoCanvas.toDataURL('image/jpeg'), info.name, percent);
+
+      captureBtn.innerText = "🔄 다시 찍기";
+      captureBtn.disabled = false;
+      captureBtn.onclick = resetCamera;
+    });
+
+    async function sendToSheet(imageData, emotionName, score) {
+      statusBadge.innerText = "📊 시트에 저장 중...";
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: imageData, emotion: emotionName, score: score })
+        });
+        statusBadge.innerText = "✅ 저장 완료!";
+        setTimeout(loadHistory, 1500); 
+      } catch (err) {
+        statusBadge.innerText = "⚠️ 저장 실패";
+      }
+    }
+
+    async function loadHistory() {
+      historyTableBody.innerHTML = '<tr><td colspan="4">기록을 불러오는 중...</td></tr>';
+      try {
+        const res = await fetch(GAS_URL + "?action=read");
+        const list = await res.json();
+        
+        if (!list || list.length === 0) {
+          historyTableBody.innerHTML = '<tr><td colspan="4">아직 기록된 감정 일기가 없습니다.</td></tr>';
+          return;
+        }
+
+        historyTableBody.innerHTML = "";
+        list.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.date}</td>
+            <td><strong>${item.emotion}</strong></td>
+            <td>${item.score}</td>
+            <td><a class="img-link" href="${item.fileUrl}" target="_blank">🖼️ 사진 보기</a></td>
+          `;
+          historyTableBody.appendChild(tr);
+        });
+      } catch (err) {
+        historyTableBody.innerHTML = '<tr><td colspan="4" style="color:red;">목록을 불러오지 못했습니다.</td></tr>';
+      }
+    }
+
+    function resetCamera() {
+      photoCanvas.style.display = 'none';
+      video.style.display = 'block';
+      statusBadge.innerText = "실시간 카메라 사용 중";
+      emotionTitle.innerText = "준비 완료";
+      barsContainer.innerHTML = "";
+      captureBtn.innerText = "📷 사진 찍고 감정 분석";
+      captureBtn.onclick = null;
+      captureBtn.disabled = false;
+    }
+
+    init();
+  </script>
+</body>
+</html>
