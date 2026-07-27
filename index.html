@@ -24,10 +24,11 @@
     .emotion-title { font-size: 1.4rem; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }
     .emotion-desc { color: #555; font-size: 0.9rem; line-height: 1.5; margin-bottom: 15px; }
     .bar-item { display: flex; align-items: center; font-size: 0.8rem; margin-bottom: 4px; }
-    .bar-label { width: 50px; color: #666; }
+    .bar-label { width: 65px; color: #666; font-size: 0.78rem; }
     .bar-track { flex-grow: 1; background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden; margin: 0 8px; }
     .bar-fill { height: 100%; background: #4A90E2; width: 0%; transition: width 0.4s ease; }
     .bar-percent { width: 35px; text-align: right; color: #888; }
+    
     .history-section { border-top: 2px dashed #eee; padding-top: 25px; text-align: left; }
     .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .history-header h2 { font-size: 1.25rem; color: #333; }
@@ -45,13 +46,13 @@
 <body>
   <div class="container">
     <h1>📖 AI 감정 일기</h1>
-    <p class="subtitle">카메라를 바라보고 사진을 찍으면 감정을 분석하여 기록해 드려요.</p>
+    <p class="subtitle">카메라를 바라보고 사진을 찍으면 감정을 정밀하게 분석하여 기록해 드려요.</p>
     
     <div class="app-layout">
       <div class="cam-box">
         <video id="webcam" autoplay muted playsinline></video>
         <canvas id="photoCanvas" class="preview" style="display: none;"></canvas>
-        <div id="statusBadge" class="status-badge">AI 모델 로딩 중...</div>
+        <div id="statusBadge" class="status-badge">고성능 AI 모델 로딩 중...</div>
       </div>
       <div class="control-box">
         <div id="resultCard" class="result-card">
@@ -63,6 +64,7 @@
       </div>
     </div>
 
+    <!-- 하단 감정 일기 내역 표 -->
     <div class="history-section">
       <div class="history-header">
         <h2>📜 누적 감정 일기 목록</h2>
@@ -87,7 +89,6 @@
   </div>
 
   <script>
-    // ⚠️ 아래 큰따옴표 안에 1단계에서 복사한 구글 앱스 스크립트 웹 앱 URL을 붙여넣으세요!
     const GAS_URL = "https://script.google.com/macros/s/AKfycbwT3p1-ejmVsgzi1PDRSx2bLeJO4yd7LugJaETumcZ8gYirlx6DTaK6lBkRIhNl8G_1JQ/exec";
 
     const video = document.getElementById('webcam');
@@ -99,23 +100,80 @@
     const barsContainer = document.getElementById('bars');
     const historyTableBody = document.getElementById('historyTableBody');
 
-    const emotionMap = {
-      happy: { name: "기쁨 😊", desc: "밝고 긍정적인 에너지가 가득한 순간이네요! 오늘 즐거웠던 일을 일기에 남겨보세요." },
-      neutral: { name: "평온 😐", desc: "차분하고 안정된 마음 상태입니다. 무던하게 지나가는 오늘 하루도 소중합니다." },
-      sad: { name: "슬픔 😢", desc: "마음이 가라앉아 있나요? 솔직한 감정을 써 내려가는 것만으로도 마음이 나아집니다." },
-      angry: { name: "분노 😡", desc: "답답하거나 속상한 일이 있으셨나요? 글을 통해 마음을 가만히 정돈해보세요." },
-      surprised: { name: "놀람 😲", desc: "뜻밖의 일에 놀라셨군요! 어떤 흥미로운 일이 있었는지 적어볼까요?" },
-      fearful: { name: "두려움 😨", desc: "걱정이나 불안한 마음이 드시나요? 불안의 이유를 글로 써보면 안정을 찾을 수 있습니다." },
-      disgusted: { name: "불쾌 🤢", desc: "스트레스 받는 상황인가요? 나를 기분 좋게 만드는 일들을 떠올려 보세요." }
+    // 기본 감정 한글 이름
+    const baseNames = {
+      happy: "기쁨",
+      neutral: "평온",
+      sad: "슬픔",
+      angry: "분노",
+      surprised: "놀람",
+      fearful: "불안",
+      disgusted: "불쾌"
     };
+
+    // 정밀 복합 감정 분석 로직
+    function parseDetailedEmotion(sortedList) {
+      const top = sortedList[0];
+      const second = sortedList[1];
+      
+      const primary = top.emotion;
+      const sec = (second && second.score > 0.15) ? second.emotion : null;
+
+      // 상위 1, 2위 감정 조합을 통한 20가지+ 세분화된 감정 매핑
+      if (primary === 'happy') {
+        if (sec === 'surprised') return { name: "설렘과 환희 🤩", desc: "뜻밖의 기쁜 소식이나 신나는 일로 가득한 순간이네요!" };
+        if (sec === 'neutral') return { name: "은은한 미소 🙂", desc: "마음속 깊이 잔잔한 만족감과 소소한 행복이 느껴집니다." };
+        return { name: "기쁨과 행복 😊", desc: "밝고 긍정적인 에너지가 가득한 순간이네요! 오늘 즐거웠던 일을 남겨보세요." };
+      }
+      
+      if (primary === 'neutral') {
+        if (sec === 'happy') return { name: "온화함과 안도 🙂", desc: "걱정이 사라지고 마음이 한결 편안해진 상태입니다." };
+        if (sec === 'sad') return { name: "센티멘털 / 묵직함 🌧️", desc: "조용히 생각을 정리하고 싶은 차분하고 아련한 시간입니다." };
+        if (sec === 'surprised') return { name: "호기심 / 집중 🧐", desc: "언어 표현 너머의 무언가에 관심과 흥미를 보이는 상태입니다." };
+        return { name: "차분함과 평온 😐", desc: "특별한 동요 없이 평온한 마음 상태입니다. 무던한 오늘 하루도 소중해요." };
+      }
+
+      if (primary === 'sad') {
+        if (sec === 'angry') return { name: "억울함과 속상함 😤", desc: "마음대로 되지 않아 답답하고 서운한 마음이 섞여 있네요." };
+        if (sec === 'fearful') return { name: "외로움과 불안 🥺", desc: "위로가 필요한 시간입니다. 나 자신에게 따뜻한 한마디를 적어보세요." };
+        if (sec === 'neutral') return { name: "쓸쓸함과 아쉬움 🌧️", desc: "지나간 일에 대한 아쉬움이나 조용한 가라앉음이 느껴집니다." };
+        return { name: "슬픔과 우울 😢", desc: "마음이 많이 가라앉아 있나요? 글을 써 내려가는 것만으로도 마음이 털어집니다." };
+      }
+
+      if (primary === 'angry') {
+        if (sec === 'disgusted') return { name: "불쾌한 분노 😠", desc: "상황이나 사람에 대해 큰 스트레스와 반감이 일어난 상태입니다." };
+        if (sec === 'sad') return { name: "상처받은 마음 💔", desc: "화가 나지만 그 뒤에 상처와 서러움이 숨어 있네요." };
+        return { name: "분노와 답답함 😡", desc: "속상하거나 화가 나는 일이 있었나요? 글을 통해 마음을 가만히 정돈해보세요." };
+      }
+
+      if (primary === 'surprised') {
+        if (sec === 'happy') return { name: "유쾌한 경악 😆", desc: "너무 신기하고 재미있는 상황에 빵 터진 순간입니다!" };
+        if (sec === 'fearful') return { name: "당황과 놀람 😱", desc: "갑작스러운 상황에 가슴이 쿵쾅거리고 놀란 상태입니다." };
+        return { name: "뜻밖의 놀람 😲", desc: "예상치 못한 일이 일어났군요! 어떤 흥미로운 일이 있었는지 적어볼까요?" };
+      }
+
+      if (primary === 'fearful') {
+        if (sec === 'sad') return { name: "걱정과 근심 😰", desc: "앞일에 대한 부담감이나 불안이 마음을 짓누르고 있네요." };
+        return { name: "불안과 두려움 😨", desc: "불안의 이유를 글로 솔직하게 적어보면 마음의 안정을 쉽게 찾을 수 있습니다." };
+      }
+
+      if (primary === 'disgusted') {
+        return { name: "불쾌 및 피로 🤢", desc: "지치고 피곤하거나 거부감이 드는 상황입니다. 나만을 위한 휴식이 필요해요." };
+      }
+
+      return { name: "감정 기록 중 💭", desc: "오늘의 감정을 기록해 드립니다." };
+    }
 
     async function init() {
       try {
         loadHistory(); 
 
         const MODEL_URL = 'https://vladmandic.github.io/face-api/model/';
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        
+        // 정밀도가 훨씬 높고 미세 표정을 잘 잡는 SsdMobilenetv1 로드
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+        
         statusBadge.innerText = "카메라 연결 중...";
         
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
@@ -125,19 +183,23 @@
         statusBadge.innerText = "오류 발생";
         emotionTitle.innerText = "카메라 권한 필요";
         emotionDesc.innerText = "웹캠 사용 권한을 허용해 주세요.";
+        console.error("Camera/Model error: ", err);
       }
     }
 
     captureBtn.addEventListener('click', async () => {
       captureBtn.disabled = true;
-      statusBadge.innerText = "감정 분석 중...";
+      statusBadge.innerText = "감정 정밀 분석 중...";
       photoCanvas.width = video.videoWidth;
       photoCanvas.height = video.videoHeight;
       photoCanvas.getContext('2d').drawImage(video, 0, 0);
       video.style.display = 'none';
       photoCanvas.style.display = 'block';
 
-      const detection = await faceapi.detectSingleFace(photoCanvas, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+      // SsdMobilenetv1을 사용해 검출 감도 상향
+      const detection = await faceapi.detectSingleFace(photoCanvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 }))
+                                     .withFaceExpressions();
+
       if (!detection) {
         emotionTitle.innerText = "얼굴 인식 실패 ❓";
         emotionDesc.innerText = "카메라 정면을 또렷하게 바라보고 다시 시도해 주세요.";
@@ -146,23 +208,45 @@
         return;
       }
 
-      const sorted = Object.keys(detection.expressions).map(k => ({ emotion: k, score: detection.expressions[k] })).sort((a, b) => b.score - a.score);
+      // **핵심: 평온(neutral) 과다 편향 보정 (가중치 0.5 적용)**
+      const rawExpressions = { ...detection.expressions };
+      rawExpressions.neutral = rawExpressions.neutral * 0.5;
+
+      // 점수 전체 합산 후 확률 정규화 (%)
+      const totalScore = Object.values(rawExpressions).reduce((a, b) => a + b, 0);
+      const normalizedScores = {};
+      for (let k in rawExpressions) {
+        normalizedScores[k] = rawExpressions[k] / totalScore;
+      }
+
+      // 내림차순 정렬
+      const sorted = Object.keys(normalizedScores)
+        .map(k => ({ emotion: k, score: normalizedScores[k] }))
+        .sort((a, b) => b.score - a.score);
+
       const top = sorted[0];
-      const info = emotionMap[top.emotion] || { name: top.emotion, desc: "오늘의 감정이 기록되었습니다." };
-      const percent = Math.round(top.score * 100);
+      const info = parseDetailedEmotion(sorted);
+      const mainPercent = Math.round(top.score * 100);
 
       emotionTitle.innerText = info.name;
       emotionDesc.innerText = info.desc;
 
+      // 백분율 프로그래스 바 렌더링
       barsContainer.innerHTML = "";
       sorted.forEach(item => {
         const p = Math.round(item.score * 100);
-        if (p < 1) return;
-        const name = emotionMap[item.emotion] ? emotionMap[item.emotion].name.split(' ')[0] : item.emotion;
-        barsContainer.innerHTML += `<div class="bar-item"><span class="bar-label">${name}</span><div class="bar-track"><div class="bar-fill" style="width:${p}%;"></div></div><span class="bar-percent">${p}%</span></div>`;
+        if (p < 2) return; // 2% 미만 생략
+        const labelName = baseNames[item.emotion] || item.emotion;
+        barsContainer.innerHTML += `
+          <div class="bar-item">
+            <span class="bar-label">${labelName}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${p}%;"></div></div>
+            <span class="bar-percent">${p}%</span>
+          </div>`;
       });
 
-      await sendToSheet(photoCanvas.toDataURL('image/jpeg'), info.name, percent);
+      // 구글 스프레드시트로 전송
+      await sendToSheet(photoCanvas.toDataURL('image/jpeg'), info.name, mainPercent);
 
       captureBtn.innerText = "🔄 다시 찍기";
       captureBtn.disabled = false;
